@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro Comando - Versione Definitiva</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --bg: #111827; --card: #1f2937; --accent: #0ea5e9; --text: #f3f4f6; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
+        
+        /* Box Login */
+        #login-screen { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #0f172a; }
+        .login-box { background: var(--card); padding: 35px; border-radius: 15px; border: 1px solid #374151; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); text-align: center; }
+        .login-box h2 { color: var(--accent); margin-bottom: 20px; }
+        .login-box select, .login-box input { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #374151; background: #000; color: white; box-sizing: border-box; font-size: 1rem; }
+        
+        /* Interfaccia */
+        #main-content { display: none; padding: 20px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 15px 25px; border-radius: 10px; border: 1px solid var(--accent); margin-bottom: 25px; }
+        
+        table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; }
+        th, td { border: 1px solid #374151; padding: 12px; text-align: left; }
+        th { background: #374151; color: var(--accent); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
+
+        .btn { padding: 8px 15px; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-ok { background: #10b981; color: white; margin-right: 5px; }
+        .btn-del { background: #ef4444; color: white; }
+        
+        .firma-row { display: flex; justify-content: space-between; align-items: center; border: 1px solid #4b5563; margin-top: 3px; padding: 4px; font-size: 10px; border-radius: 3px; }
+        .box-sigla { border-left: 1px solid #4b5563; width: 60px; height: 18px; background: rgba(255,255,255,0.05); }
+
+        /* Schema Riassuntivo */
+        #riassunto { background: #1e293b; padding: 20px; border-radius: 10px; border: 2px solid var(--accent); margin-top: 30px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+        .stat-box { background: #0f172a; padding: 10px; border-radius: 6px; text-align: center; border: 1px solid #334155; }
+        .stat-box span { display: block; font-size: 1.2rem; font-weight: bold; color: var(--accent); }
+        .stat-box label { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; color: black; padding: 0; }
+            .header-bar { border: 2px solid black; color: black; background: transparent; }
+            table, th, td { border: 1px solid black !important; color: black !important; }
+            #riassunto { border: 2px solid black; color: black; background: white; page-break-inside: avoid; }
+            .stat-box { border: 1px solid black; background: white; }
+            .stat-box span { color: black; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" id="login-screen">
+        <div class="login-box">
+            <i class="fas fa-user-shield" style="font-size: 3rem; color: var(--accent); margin-bottom: 15px;"></i>
+            <h2>Comando</h2>
+            <select id="user">
+                <option value="1">1° PLOTONE</option>
+                <option value="2">2° PLOTONE</option>
+                <option value="3">3° PLOTONE</option>
+                <option value="ALL">COMANDO (VISUALIZZA TUTTO)</option>
+            </select>
+            <input type="password" id="pin" placeholder="Inserisci PIN">
+            <button class="btn" style="background:var(--accent); color:white; width:100%; margin-top:10px;" onclick="unlock()">ENTRA</button>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <div class="header-bar">
+            <div>
+                <h2 style="margin:0;">Registro Richieste</h2>
+                <span id="labelPlotone" style="color:var(--accent); font-weight:bold; text-transform:uppercase;"></span>
+            </div>
+            <div class="no-print">
+                <button class="btn" style="background:var(--accent); color:white;" onclick="window.print()"><i class="fas fa-print"></i> STAMPA</button>
+                <button class="btn" style="background:#4b5563; color:white;" onclick="location.reload()">LOGOUT</button>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Grado e Nominativo</th>
+                    <th>Unità</th>
+                    <th>Richiesta</th>
+                    <th style="width:220px;">Stato / Firme Rientro</th>
+                    <th class="no-print">Azioni</th>
+                </tr>
+            </thead>
+            <tbody id="tabellaCorpo"></tbody>
+        </table>
+
+        <div id="riassunto">
+            <h3 style="margin-top:0; border-bottom:1px solid #0ea5e9; padding-bottom:5px;">RIEPILOGO STATISTICO</h3>
+            <div class="stats-grid" id="statsGrid"></div>
+        </div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const db = getDatabase(initializeApp({ databaseURL: "https://database-libere-uscite-default-rtdb.firebaseio.com/" }));
+
+    // PIN CONFIGURATION
+    const CREDENTIALS = {
+        "1": "1111",     // PIN 1° Plotone
+        "2": "2222",     // PIN 2° Plotone
+        "3": "3333",     // PIN 3° Plotone
+        "ALL": "9999"   // PIN Generale
+    };
+
+    let plotoneAttivo = "";
+
+    window.unlock = () => {
+        const user = document.getElementById('user').value;
+        const pinInviato = document.getElementById('pin').value;
+
+        if (CREDENTIALS[user] === pinInviato) {
+            plotoneAttivo = user;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            document.getElementById('labelPlotone').innerText = "Sessione: " + (user === 'ALL' ? "TUTTI I PLOTONI" : user + "° PLOTONE");
+            caricaDati();
+        } else {
+            alert("PIN non valido!");
+        }
+    };
+
+    function caricaDati() {
+        onValue(ref(db, 'registrazioni'), (snapshot) => {
+            const corpo = document.getElementById('tabellaCorpo');
+            corpo.innerHTML = "";
+            const dati = snapshot.val();
+            if(!dati) return calcolaStats([]);
+
+            // Filtro Archiviati (stato 'X')
+            let entries = Object.entries(dati).filter(([id, v]) => v.stato !== 'X');
+
+            // Filtro Plotone Intelligente
+            if (plotoneAttivo !== "ALL") {
+                entries = entries.filter(([id, v]) => {
+                    const numeroScrittoDalMilitare = v.plotone.replace(/\D/g, "");
+                    return numeroScrittoDalMilitare === plotoneAttivo;
+                });
+            }
+
+            entries.sort((a,b) => b[1].timestamp - a[1].timestamp).forEach(([id, v]) => {
+                const isApp = v.stato === 'A';
+                const isPasto = v.scelta.includes("Salto Pasto");
+                const firme = v.scelta.split(", ").map(s => `
+                    <div class="firma-row"><span>${s}</span><div class="box-sigla"></div></div>
+                `).join("");
+
+                corpo.innerHTML += `
+                    <tr>
+                        <td>${v.data}</td>
+                        <td><b>${v.grado} ${v.nominativo}</b></td>
+                        <td>${v.compagnia} / ${v.plotone}</td>
+                        <td>${v.scelta}</td>
+                        <td>
+                            <div style="margin-bottom:5px;">
+                                ${isApp ? '<span style="color:#10b981; font-weight:bold; font-size:10px;">AUTORIZZATO</span>' : '<span style="color:#facc15; font-weight:bold; font-size:10px;">IN ATTESA</span>'}
+                            </div>
+                            ${firme}
+                        </td>
+                        <td class="no-print">
+                            ${(isPasto && !isApp) ? `<button class="btn btn-ok" onclick="appr('${id}')">OK</button>` : ''}
+                            <button class="btn btn-del" onclick="archivia('${id}')"><i class="fas fa-archive"></i></button>
+                        </td>
+                    </tr>`;
+            });
+            calcolaStats(entries.map(e => e[1]));
+        });
+    }
+
+    function calcolaStats(datiArray) {
+        let stats = { totale: datiArray.length, pasti: 0 };
+        let fasce = {};
+        datiArray.forEach(d => {
+            const scelte = d.scelta.split(", ");
+            scelte.forEach(s => {
+                if(s.includes("Salto Pasto")) stats.pasti++;
+                else fasce[s] = (fasce[s] || 0) + 1;
+            });
+        });
+        const grid = document.getElementById('statsGrid');
+        let html = `<div class="stat-box"><label>Militari Tot.</label><span>${stats.totale}</span></div>
+                    <div class="stat-box"><label>Salti Pasto</label><span>${stats.pasti}</span></div>`;
+        for (let [nome, conteggio] of Object.entries(fasce)) {
+            html += `<div class="stat-box"><label>${nome}</label><span>${conteggio}</span></div>`;
+        }
+        grid.innerHTML = html;
+    }
+
+    window.appr = (id) => update(ref(db, 'registrazioni/' + id), { stato: 'A' });
+    window.archivia = (id) => confirm("Archiviare la richiesta?") && update(ref(db, 'registrazioni/' + id), { stato: 'X' });
+</script>
+</body>
+</html>
